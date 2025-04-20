@@ -24,6 +24,16 @@ export interface Subscription {
   updatedAt: string;
 }
 
+export interface BillingHistory {
+  id: string;
+  subscriptionId: string;
+  amount: number;
+  currency: string;
+  startDate: string;
+  endDate: string;
+  status: 'paid' | 'pending' | 'failed';
+}
+
 export const fakeUser: User = {
   id: '1',
   email: 'user@example.com',
@@ -56,7 +66,6 @@ export const fakeSubscriptions: Subscription[] = [
     color: '#1DB954',
     price: 9.99,
     currency: 'USD',
-    // Set to 2 days from now to show the warning
     startDate: addDays(new Date(), -28).toISOString(),
     billingCycle: 'monthly',
     category: 'Music',
@@ -117,13 +126,69 @@ export const fakeSubscriptions: Subscription[] = [
     color: '#00C4CC',
     price: 3.99,
     currency: 'USD',
-    // Set to 2 days before next weekly payment
     startDate: addDays(new Date(), -5).toISOString(),
     billingCycle: 'weekly',
     category: 'Productivity',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   }
+];
+
+export const fakeBillingHistory: BillingHistory[] = [
+  {
+    id: 'bill-1',
+    subscriptionId: '1',
+    amount: 15.99,
+    currency: 'USD',
+    startDate: '2024-01-15',
+    endDate: '2024-02-14',
+    status: 'paid',
+  },
+  {
+    id: 'bill-2',
+    subscriptionId: '1',
+    amount: 15.99,
+    currency: 'USD',
+    startDate: '2023-12-15',
+    endDate: '2024-01-14',
+    status: 'paid',
+  },
+  {
+    id: 'bill-3',
+    subscriptionId: '2',
+    amount: 9.99,
+    currency: 'USD',
+    startDate: '2024-01-28',
+    endDate: '2024-02-27',
+    status: 'pending',
+  },
+  {
+    id: 'bill-4',
+    subscriptionId: '2',
+    amount: 9.99,
+    currency: 'USD',
+    startDate: '2023-12-28',
+    endDate: '2024-01-27',
+    status: 'paid',
+  },
+  {
+    id: 'bill-5',
+    subscriptionId: '3',
+    amount: 52.99,
+    currency: 'USD',
+    startDate: '2024-01-05',
+    endDate: '2024-02-04',
+    status: 'paid',
+  },
+  {
+    id: 'bill-6',
+    subscriptionId: '3',
+    amount: 52.99,
+    currency: 'USD',
+    startDate: '2023-12-05',
+    endDate: '2024-01-04',
+    status: 'paid',
+  },
 ];
 
 export function calculateNextBillingDate(startDate: string, billingCycle: BillingCycle): Date {
@@ -175,7 +240,7 @@ export function calculateTotalMonthlyExpenses(subscriptions: Subscription[]): nu
     
     switch (subscription.billingCycle) {
       case 'weekly':
-        monthlyAmount = subscription.price * 4.33; // Average weeks per month
+        monthlyAmount = subscription.price * 4.33;
         break;
       case 'quarterly':
         monthlyAmount = subscription.price / 3;
@@ -214,4 +279,8 @@ export function groupSubscriptionsByCurrency(subscriptions: Subscription[]): Rec
     acc[currency] = (acc[currency] || 0) + monthlyAmount;
     return acc;
   }, {} as Record<string, number>);
+}
+
+export function getBillingHistory(subscriptionId: string): BillingHistory[] {
+  return fakeBillingHistory.filter(bill => bill.subscriptionId === subscriptionId);
 }

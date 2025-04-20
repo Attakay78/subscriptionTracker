@@ -1,7 +1,7 @@
 import React from 'react';
-import { StyleSheet, Text, View, Image, Platform } from 'react-native';
+import { StyleSheet, Text, View, Image, Platform, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
-import { format, differenceInDays } from 'date-fns';
+import { differenceInDays } from 'date-fns';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, FONT_SIZES, SPACING, BORDER_RADIUS } from '@/constants/theme';
 import { Card } from '@/components/ui/Card';
@@ -9,9 +9,10 @@ import { formatCurrency, calculateNextBillingDate, Subscription } from '@/data/f
 
 interface SubscriptionCardProps {
   subscription: Subscription;
+  onPress?: () => void;
 }
 
-export function SubscriptionCard({ subscription }: SubscriptionCardProps) {
+export function SubscriptionCard({ subscription, onPress }: SubscriptionCardProps) {
   const router = useRouter();
   const {
     id,
@@ -26,15 +27,26 @@ export function SubscriptionCard({ subscription }: SubscriptionCardProps) {
 
   const nextBillingDate = calculateNextBillingDate(startDate, billingCycle);
   const daysUntilBilling = differenceInDays(nextBillingDate, new Date());
-  const isNearBilling = daysUntilBilling <= 3; // Consider 3 days as "near billing"
+  const isNearBilling = daysUntilBilling <= 3;
   
-  const navigateToDetails = () => {
-    router.push(`/subscription/${id}`);
+  const handlePress = () => {
+    if (onPress) {
+      onPress();
+    } else {
+      router.push(`/subscription/${id}`);
+    }
+  };
+
+  const getBillingStatusText = () => {
+    if (daysUntilBilling === 0) return 'Due today';
+    if (daysUntilBilling === 1) return 'Due tomorrow';
+    if (daysUntilBilling < 0) return `${Math.abs(daysUntilBilling)} days overdue`;
+    return `${daysUntilBilling} days left`;
   };
 
   return (
     <Card 
-      onPress={navigateToDetails}
+      onPress={handlePress}
       style={styles.card}
       elevation="md"
     >
@@ -47,37 +59,27 @@ export function SubscriptionCard({ subscription }: SubscriptionCardProps) {
         />
       )}
       <View style={styles.container}>
-        <View style={styles.logoContainer}>
-          <View style={[styles.logoBackground, { backgroundColor: color || COLORS.neutral[200] }]}>
-            <Image
-              source={{ uri: platformLogo }}
-              style={styles.logo}
-              resizeMode="cover"
-            />
-          </View>
+        <View style={[styles.logoContainer, { backgroundColor: color }]}>
+          <Image
+            source={{ uri: platformLogo }}
+            style={styles.logo}
+            resizeMode="cover"
+          />
         </View>
         <View style={styles.content}>
-          <Text style={styles.name}>{platformName}</Text>
-          <Text style={styles.price}>
-            {formatCurrency(price, currency)}
-            <Text style={styles.cycle}> / {billingCycle}</Text>
-          </Text>
+          <View style={styles.mainContent}>
+            <Text style={styles.name} numberOfLines={1}>{platformName}</Text>
+            <Text style={styles.price}>{formatCurrency(price, currency)}</Text>
+          </View>
           <View style={[
-            styles.nextBilling,
-            isNearBilling && styles.nextBillingWarning
+            styles.statusBadge,
+            isNearBilling && styles.statusBadgeWarning
           ]}>
             <Text style={[
-              styles.nextBillingLabel,
-              isNearBilling && styles.nextBillingLabelWarning
+              styles.statusText,
+              isNearBilling && styles.statusTextWarning
             ]}>
-              {isNearBilling ? 'Due Soon' : 'Next billing'}
-            </Text>
-            <Text style={[
-              styles.nextBillingDate,
-              isNearBilling && styles.nextBillingDateWarning
-            ]}>
-              {format(nextBillingDate, 'MMM d, yyyy')}
-              {isNearBilling && ` (${daysUntilBilling} days)`}
+              {getBillingStatusText()}
             </Text>
           </View>
         </View>
@@ -102,67 +104,69 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
+    padding: SPACING[1.5],
+    gap: SPACING[2],
   },
   logoContainer: {
-    marginRight: SPACING[3],
-  },
-  logoBackground: {
-    width: 60,
-    height: 60,
+    width: 48,
+    height: 48,
     borderRadius: BORDER_RADIUS.lg,
+    overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
-    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: COLORS.black,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   logo: {
-    width: 60,
-    height: 60,
+    width: 48,
+    height: 48,
   },
   content: {
     flex: 1,
+    gap: SPACING[1],
+  },
+  mainContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   name: {
     fontFamily: FONTS.semiBold,
-    fontSize: FONT_SIZES.lg,
+    fontSize: FONT_SIZES.base,
     color: COLORS.neutral[900],
-    marginBottom: SPACING[0.5],
+    flex: 1,
+    marginRight: SPACING[2],
   },
   price: {
     fontFamily: FONTS.bold,
-    fontSize: FONT_SIZES.xl,
+    fontSize: FONT_SIZES.lg,
     color: COLORS.neutral[900],
-    marginBottom: SPACING[1],
   },
-  cycle: {
-    fontFamily: FONTS.regular,
-    fontSize: FONT_SIZES.sm,
-    color: COLORS.neutral[500],
-  },
-  nextBilling: {
-    backgroundColor: COLORS.neutral[100],
-    borderRadius: BORDER_RADIUS.md,
-    paddingVertical: SPACING[0.5],
-    paddingHorizontal: SPACING[1],
+  statusBadge: {
     alignSelf: 'flex-start',
+    paddingVertical: 2,
+    paddingHorizontal: SPACING[1.5],
+    backgroundColor: COLORS.neutral[100],
+    borderRadius: BORDER_RADIUS.full,
   },
-  nextBillingWarning: {
+  statusBadgeWarning: {
     backgroundColor: COLORS.error[50],
   },
-  nextBillingLabel: {
-    fontFamily: FONTS.regular,
+  statusText: {
+    fontFamily: FONTS.medium,
     fontSize: FONT_SIZES.xs,
-    color: COLORS.neutral[500],
+    color: COLORS.neutral[700],
   },
-  nextBillingLabelWarning: {
-    color: COLORS.error[700],
-    fontFamily: FONTS.medium,
-  },
-  nextBillingDate: {
-    fontFamily: FONTS.medium,
-    fontSize: FONT_SIZES.sm,
-    color: COLORS.neutral[800],
-  },
-  nextBillingDateWarning: {
+  statusTextWarning: {
     color: COLORS.error[700],
   },
 });

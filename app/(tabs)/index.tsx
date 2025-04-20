@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -13,6 +13,7 @@ import {
   Pressable,
   ScrollView,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { ArrowDown, ArrowUp, ChevronDown, ArrowUpDown } from 'lucide-react-native';
 import { COLORS, FONTS, FONT_SIZES, SPACING, BORDER_RADIUS } from '@/constants/theme';
@@ -54,13 +55,23 @@ const SORT_OPTIONS: SortOption[] = [
 ];
 
 export default function HomeScreen() {
+  const router = useRouter();
   const { user } = useAuth();
   const { subscriptions, isLoading } = useSubscriptions();
   const [refreshing, setRefreshing] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(1);
+  const [activeIndex, setActiveIndex] = useState(0);
   const [sortBy, setSortBy] = useState<SortOption['value']>('platformName');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const scrollRef = useRef<FlatList>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollToIndex({
+        index: 0,
+        animated: false,
+      });
+    }
+  }, []);
 
   const sortSubscriptions = (subs: Subscription[]) => {
     return [...subs].sort((a, b) => {
@@ -125,7 +136,10 @@ export default function HomeScreen() {
     const count = getFilteredSubscriptions(item.value).length;
 
     return (
-      <View style={[styles.statsCard, { backgroundColor: item.color, width: CARD_WIDTH }]}>
+      <TouchableOpacity 
+        style={[styles.statsCard, { backgroundColor: item.color }]}
+        onPress={() => router.push(`/overview/${item.value}`)}
+      >
         <Text style={styles.statsTitle}>{item.label} Subscriptions</Text>
         <ScrollView 
           horizontal 
@@ -146,7 +160,7 @@ export default function HomeScreen() {
         <Text style={styles.statsSubtitle}>
           {count} Active Subscription{count !== 1 ? 's' : ''}
         </Text>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -164,10 +178,8 @@ export default function HomeScreen() {
 
   const handleSortChange = (option: SortOption['value']) => {
     if (sortBy === option) {
-      // If clicking the same option, toggle the sort order
       setSortOrder(current => current === 'asc' ? 'desc' : 'asc');
     } else {
-      // If clicking a new option, set it and default to ascending order
       setSortBy(option);
       setSortOrder('asc');
     }
@@ -199,6 +211,7 @@ export default function HomeScreen() {
           decelerationRate="fast"
           contentContainerStyle={styles.summaryList}
           onScroll={onScroll}
+          initialScrollIndex={0}
         />
         
         <View style={styles.pagination}>
@@ -328,6 +341,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     height: 160,
+    width: CARD_WIDTH,
   },
   statsTitle: {
     fontFamily: FONTS.medium,

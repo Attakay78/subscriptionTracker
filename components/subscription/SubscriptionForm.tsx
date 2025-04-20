@@ -1,31 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   Text, 
   View, 
-  ScrollView, 
+  ScrollView,
   TouchableOpacity,
-  Image,
+  SafeAreaView,
   Platform,
   KeyboardAvoidingView,
   Modal,
   Pressable,
   TextInput,
+  Image,
+  Keyboard,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { format } from 'date-fns';
-import { Calendar, ArrowLeft, ChevronDown, Search, X } from 'lucide-react-native';
+import { Calendar, ArrowLeft, ChevronDown, Search, X, Plus } from 'lucide-react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { COLORS, FONTS, FONT_SIZES, SPACING, BORDER_RADIUS } from '@/constants/theme';
 import { Button } from '@/components/ui/Button';
-import { subscriptionPlatforms, billingCycles, getCustomPlatform, SUPPORTED_CURRENCIES, getCurrencySymbol } from '@/data/subscriptionPlatforms';
+import { Input } from '@/components/ui/Input';
+import { subscriptionPlatforms, billingCycles, SUPPORTED_CURRENCIES, getCurrencySymbol } from '@/data/subscriptionPlatforms';
 import { useSubscriptions } from '@/context/SubscriptionContext';
 import { useAuth } from '@/context/AuthContext';
 
 interface FormState {
   platformSearch: string;
-  selectedPlatform: typeof subscriptionPlatforms[0] | null;
-  customPlatformName: string;
+  selectedPlatform: any;
   price: string;
   currency: string;
   billingCycle: string;
@@ -42,7 +44,6 @@ interface FormState {
 const initialFormState: FormState = {
   platformSearch: '',
   selectedPlatform: null,
-  customPlatformName: '',
   price: '',
   currency: 'USD',
   billingCycle: billingCycles[1].value,
@@ -58,19 +59,56 @@ const initialFormState: FormState = {
 
 export function SubscriptionForm() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const { user } = useAuth();
-  const { addSubscription } = useSubscriptions();
+  const { addSubscription, customPlatforms } = useSubscriptions();
   
-  const [isAdding, setIsAdding] = useState(false);
   const [formState, setFormState] = useState<FormState>(initialFormState);
+  const [isAdding, setIsAdding] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
 
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      'keyboardDidShow',
+      () => setKeyboardVisible(true)
+    );
+    const keyboardDidHideListener = Keyboard.addListener(
+      'keyboardDidHide',
+      () => setKeyboardVisible(false)
+    );
+
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (params.customPlatform) {
+      try {
+        const platform = JSON.parse(params.customPlatform as string);
+        setFormState(prev => ({
+          ...prev,
+          selectedPlatform: platform,
+          platformSearch: platform.name,
+        }));
+      } catch (error) {
+        console.error('Failed to parse custom platform:', error);
+      }
+    }
+  }, [params.customPlatform]);
+
+  const allPlatforms = [...subscriptionPlatforms, ...customPlatforms];
+  
   const filteredPlatforms = formState.platformSearch.trim() 
-    ? subscriptionPlatforms.filter(p => 
+    ? allPlatforms.filter(p => 
         p.name.toLowerCase().includes(formState.platformSearch.toLowerCase())
       )
-    : subscriptionPlatforms;
+    : allPlatforms;
 
-  const handleSelectPlatform = (platform: typeof subscriptionPlatforms[0]) => {
+  const handleSelectPlatform = (platform: any) => {
+    if (!platform) return;
+    
     setFormState(prev => ({
       ...prev,
       selectedPlatform: platform,
@@ -84,8 +122,8 @@ export function SubscriptionForm() {
     let isValid = true;
     const newErrors = { platform: '', price: '' };
 
-    if (!formState.selectedPlatform && !formState.customPlatformName.trim()) {
-      newErrors.platform = 'Please select a platform or enter a custom name';
+    if (!formState.selectedPlatform) {
+      newErrors.platform = 'Please select a platform or create a custom one';
       isValid = false;
     }
 
@@ -97,48 +135,30 @@ export function SubscriptionForm() {
 
     setFormState(prev => ({ ...prev, errors: newErrors }));
 
-    if (!isValid || !user) return;
+    if (!isValid || !user || !formState.selectedPlatform) return;
 
     try {
       setIsAdding(true);
       
-      let platformToUse = formState.selectedPlatform;
-      if (!formState.selectedPlatform && formState.customPlatformName) {
-        platformToUse = getCustomPlatform(formState.customPlatformName);
-      }
-      
-      if (!platformToUse) return;
-
       await addSubscription({
         userId: user.id,
-        platformId: platformToUse.id,
-        platformName: platformToUse.name,
-        platformLogo: platformToUse.logo,
-        color: platformToUse.color,
+        platformId: formState.selectedPlatform.id,
+        platformName: formState.selectedPlatform.name,
+        platformLogo: formState.selectedPlatform.logo,
+        color: formState.selectedPlatform.color,
         price: parseFloat(formState.price),
         currency: formState.currency,
         startDate: formState.startDate.toISOString(),
         billingCycle: formState.billingCycle,
-        category: platformToUse.category,
+        category: formState.selectedPlatform.category,
       });
 
-      router.push('/');
+      router.replace('/(tabs)');
     } catch (error) {
       console.error(error);
+      Alert.alert('Error', 'Failed to add subscription.');
     } finally {
       setIsAdding(false);
-    }
-  };
-
-  const handleCustomPlatform = () => {
-    if (formState.platformSearch.trim()) {
-      setFormState(prev => ({
-        ...prev,
-        customPlatformName: prev.platformSearch,
-        selectedPlatform: null,
-        showPlatformList: false,
-        errors: { ...prev.errors, platform: '' },
-      }));
     }
   };
 
@@ -163,8 +183,17 @@ export function SubscriptionForm() {
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.formSection}>
-          <Text style={styles.sectionTitle}>Platform</Text>
-          
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Platform</Text>
+            <TouchableOpacity
+              style={styles.addCustomButton}
+              onPress={() => router.push('/add/custom')}
+            >
+              <Plus size={16} color={COLORS.primary[500]} />
+              <Text style={styles.addCustomButtonText}>Add Custom</Text>
+            </TouchableOpacity>
+          </View>
+
           <TouchableOpacity
             style={[
               styles.platformSelector,
@@ -184,6 +213,7 @@ export function SubscriptionForm() {
                   </Text>
                   <Text style={styles.selectedPlatformCategory}>
                     {formState.selectedPlatform.category}
+                    {formState.selectedPlatform.isCustom && ' • Custom'}
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -297,53 +327,56 @@ export function SubscriptionForm() {
         animationType="fade"
         onRequestClose={() => setFormState(prev => ({ ...prev, showPlatformList: false }))}
       >
-        <Pressable 
-          style={styles.modalOverlay}
-          onPress={() => setFormState(prev => ({ ...prev, showPlatformList: false }))}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalContainer}
         >
-          <View style={styles.modalContent}>
-            <View style={styles.searchContainer}>
-              <Search size={20} color={COLORS.neutral[500]} />
-              <TextInput
-                style={styles.searchInput}
-                value={formState.platformSearch}
-                onChangeText={(text) => setFormState(prev => ({ ...prev, platformSearch: text }))}
-                placeholder="Search platforms..."
-                autoFocus
-              />
-            </View>
+          <Pressable 
+            style={[
+              styles.modalOverlay,
+              keyboardVisible && styles.modalOverlayWithKeyboard
+            ]}
+            onPress={() => setFormState(prev => ({ ...prev, showPlatformList: false }))}
+          >
+            <View style={[
+              styles.modalContent,
+              keyboardVisible && styles.modalContentWithKeyboard
+            ]}>
+              <View style={styles.searchContainer}>
+                <Search size={20} color={COLORS.neutral[500]} />
+                <TextInput
+                  style={styles.searchInput}
+                  value={formState.platformSearch}
+                  onChangeText={(text) => setFormState(prev => ({ ...prev, platformSearch: text }))}
+                  placeholder="Search platforms..."
+                  autoFocus
+                />
+              </View>
 
-            <ScrollView style={styles.platformList}>
-              {filteredPlatforms.map(platform => (
-                <TouchableOpacity
-                  key={platform.id}
-                  style={styles.platformItem}
-                  onPress={() => handleSelectPlatform(platform)}
-                >
-                  <Image
-                    source={{ uri: platform.logo }}
-                    style={styles.platformLogo}
-                  />
-                  <View style={styles.platformInfo}>
-                    <Text style={styles.platformName}>{platform.name}</Text>
-                    <Text style={styles.platformCategory}>{platform.category}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-              
-              {formState.platformSearch.trim() !== '' && (
-                <TouchableOpacity
-                  style={styles.customPlatformButton}
-                  onPress={handleCustomPlatform}
-                >
-                  <Text style={styles.customPlatformText}>
-                    Add "{formState.platformSearch}" as custom platform
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </ScrollView>
-          </View>
-        </Pressable>
+              <ScrollView style={styles.platformList}>
+                {filteredPlatforms.map(platform => (
+                  <TouchableOpacity
+                    key={platform.id}
+                    style={styles.platformItem}
+                    onPress={() => handleSelectPlatform(platform)}
+                  >
+                    <Image
+                      source={{ uri: platform.logo }}
+                      style={styles.platformLogo}
+                    />
+                    <View style={styles.platformInfo}>
+                      <Text style={styles.platformName}>{platform.name}</Text>
+                      <Text style={styles.platformCategory}>
+                        {platform.category}
+                        {platform.isCustom && ' • Custom'}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal
@@ -471,11 +504,30 @@ const styles = StyleSheet.create({
     marginTop: SPACING[2],
     padding: SPACING[3],
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING[2],
+  },
   sectionTitle: {
     fontFamily: FONTS.semiBold,
     fontSize: FONT_SIZES.base,
     color: COLORS.neutral[800],
-    marginBottom: SPACING[2],
+  },
+  addCustomButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING[2],
+    paddingVertical: SPACING[1],
+    borderRadius: BORDER_RADIUS.full,
+    backgroundColor: COLORS.primary[50],
+    gap: SPACING[1],
+  },
+  addCustomButtonText: {
+    fontFamily: FONTS.medium,
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.primary[600],
   },
   platformSelector: {
     borderWidth: 1,
@@ -617,16 +669,26 @@ const styles = StyleSheet.create({
     margin: SPACING[3],
     paddingVertical: SPACING[1.5],
   },
+  modalContainer: {
+    flex: 1,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     padding: SPACING[4],
   },
+  modalOverlayWithKeyboard: {
+    justifyContent: 'flex-start',
+    paddingTop: '20%',
+  },
   modalContent: {
     backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.xl,
     maxHeight: '80%',
+  },
+  modalContentWithKeyboard: {
+    maxHeight: '60%',
   },
   searchContainer: {
     flexDirection: 'row',
@@ -671,22 +733,6 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.sm,
     color: COLORS.neutral[500],
   },
-  customPlatformButton: {
-    padding: SPACING[4],
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.neutral[100],
-  },
-  customPlatformText: {
-    fontFamily: FONTS.medium,
-    fontSize: FONT_SIZES.base,
-    color: COLORS.primary[600],
-  },
-  currencyModalContent: {
-    backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.xl,
-    padding: SPACING[2],
-  },
   modalTitle: {
     fontFamily: FONTS.semiBold,
     fontSize: FONT_SIZES.lg,
@@ -694,6 +740,11 @@ const styles = StyleSheet.create({
     padding: SPACING[3],
     borderBottomWidth: 1,
     borderBottomColor: COLORS.neutral[200],
+  },
+  currencyModalContent: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.xl,
+    padding: SPACING[2],
   },
   currencyItem: {
     flexDirection: 'row',

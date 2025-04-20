@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { fakeUser, User } from '@/data/fakeData';
 
@@ -17,26 +17,58 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+// Helper functions for storage operations
+const storage = {
+  async getItem(key: string): Promise<string | null> {
+    if (Platform.OS === 'web') {
+      return localStorage.getItem(key);
+    }
+    return await SecureStore.getItemAsync(key);
+  },
+  async setItem(key: string, value: string): Promise<void> {
+    if (Platform.OS === 'web') {
+      localStorage.setItem(key, value);
+    } else {
+      await SecureStore.setItemAsync(key, value);
+    }
+  },
+  async removeItem(key: string): Promise<void> {
+    if (Platform.OS === 'web') {
+      localStorage.removeItem(key);
+    } else {
+      await SecureStore.deleteItemAsync(key);
+    }
+  }
+};
+
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+
     // Check if user is already logged in
     async function loadStoredUser() {
       try {
-        const storedUser = await SecureStore.getItemAsync('user');
-        if (storedUser) {
+        const storedUser = await storage.getItem('user');
+        if (storedUser && isMounted) {
           setUser(JSON.parse(storedUser));
         }
       } catch (error) {
         console.error('Failed to load auth user', error);
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     }
 
     loadStoredUser();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
@@ -44,7 +76,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // In a real app, this would verify credentials with a server
       if (email.trim() && password.trim()) {
         // For now, we'll use our fake user
-        await SecureStore.setItemAsync('user', JSON.stringify(fakeUser));
+        await storage.setItem('user', JSON.stringify(fakeUser));
         setUser(fakeUser);
         return;
       }
@@ -61,7 +93,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (email.trim() && password.trim() && name.trim()) {
         // For now, we'll just use our fake user but with the new name
         const newUser = { ...fakeUser, name, email };
-        await SecureStore.setItemAsync('user', JSON.stringify(newUser));
+        await storage.setItem('user', JSON.stringify(newUser));
         setUser(newUser);
         return;
       }
@@ -74,7 +106,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const signOut = async () => {
     try {
-      await SecureStore.deleteItemAsync('user');
+      await storage.removeItem('user');
       setUser(null);
     } catch (error) {
       Alert.alert('Error', 'Failed to sign out.');
