@@ -2,40 +2,40 @@ import { Platform } from 'react-native';
 
 export const COLORS = {
   primary: {
-    50: '#EBF5FF',
-    100: '#D6EBFF',
-    200: '#ADD6FF',
-    300: '#84BCFF',
-    400: '#5A9DFF',
-    500: '#3B82F6', // Primary
-    600: '#2A6BE0',
-    700: '#1D56C5',
-    800: '#0F3D8C',
-    900: '#0A2657',
+    50: '#FFF0F7',
+    100: '#FFE1EF',
+    200: '#FFC2DF',
+    300: '#FF94C7',
+    400: '#FF5FA8',
+    500: '#E4405F', // Primary Instagram Red
+    600: '#D6295A',
+    700: '#B91D4D',
+    800: '#931740',
+    900: '#721334',
   },
   secondary: {
-    50: '#EDFCF9',
-    100: '#D6F7F0',
-    200: '#ADEEE0',
-    300: '#84E1D0',
-    400: '#5ACFC0',
-    500: '#14B8A6', // Secondary
-    600: '#0E9889',
-    700: '#097568',
-    800: '#05524A',
-    900: '#02312C',
+    50: '#FFF5F0',
+    100: '#FFEADF',
+    200: '#FFD4BF',
+    300: '#FFAE8A',
+    400: '#FF7D47',
+    500: '#F77737', // Instagram Orange
+    600: '#E85D1A',
+    700: '#C44812',
+    800: '#9C370E',
+    900: '#7A2B0B',
   },
   accent: {
-    50: '#FFF8EB',
-    100: '#FFECD1',
-    200: '#FFD9A3',
-    300: '#FFC175',
-    400: '#FFA247',
-    500: '#F97316', // Accent
-    600: '#E55D11',
-    700: '#BF4909',
-    800: '#8C3006',
-    900: '#591E04',
+    50: '#F5F0FF',
+    100: '#EBE0FF',
+    200: '#D6C0FF',
+    300: '#B894FF',
+    400: '#9361FF',
+    500: '#833AB4', // Instagram Purple
+    600: '#6B2B99',
+    700: '#561F7C',
+    800: '#41175E',
+    900: '#321147',
   },
   success: {
     50: '#EDFDF5',
@@ -43,23 +43,23 @@ export const COLORS = {
     200: '#A7F0C5',
     300: '#7BE7A8',
     400: '#4FDB8B',
-    500: '#22C55E', // Success
+    500: '#28A745', // Success Green
     600: '#1A9E4B',
     700: '#137539',
     800: '#0C4F27',
     900: '#062916',
   },
   warning: {
-    50: '#FEFBEA',
-    100: '#FEF6D1',
-    200: '#FDEDA3',
-    300: '#FCE475',
-    400: '#FBDB47',
-    500: '#EAB308', // Warning
-    600: '#CA9A07',
-    700: '#976E05',
-    800: '#674C03',
-    900: '#332601',
+    50: '#FFF8E6',
+    100: '#FFEFC3',
+    200: '#FFE099',
+    300: '#FFD066',
+    400: '#FFC033',
+    500: '#FCAF45', // Instagram Yellow
+    600: '#E69A2C',
+    700: '#B37721',
+    800: '#805618',
+    900: '#664412',
   },
   error: {
     50: '#FEF0F0',
@@ -67,31 +67,35 @@ export const COLORS = {
     200: '#FCBBBB',
     300: '#FA9595',
     400: '#F96D6D',
-    500: '#EF4444', // Error
+    500: '#FD1D1D', // Instagram Red
     600: '#D73232',
     700: '#B42020',
     800: '#7D1515',
     900: '#500E0E',
   },
   neutral: {
-    50: '#F9FAFB',
-    100: '#F3F4F6',
-    200: '#E5E7EB',
-    300: '#D1D5DB',
-    400: '#9CA3AF',
-    500: '#6B7280',
-    600: '#4B5563',
-    700: '#374151',
-    800: '#1F2937',
-    900: '#111827',
+    50: '#FAFAFA', // Instagram Background Light
+    100: '#F5F5F5',
+    200: '#EFEFEF',
+    300: '#DBDBDB', // Instagram Border Color
+    400: '#8E8E8E', // Instagram Secondary Text
+    500: '#737373',
+    600: '#262626', // Instagram Primary Text
+    700: '#1A1A1A',
+    800: '#121212',
+    900: '#000000',
   },
   white: '#FFFFFF',
   black: '#000000',
   transparent: 'transparent',
   background: {
-    primary: '#F9FAFB',
+    primary: '#FAFAFA', // Instagram Background
     secondary: '#FFFFFF',
-    tertiary: '#F3F4F6',
+    tertiary: '#F5F5F5',
+  },
+  gradient: {
+    instagram: ['#833AB4', '#E4405F', '#F77737'], // Instagram Gradient
+    story: ['#FD1D1D', '#833AB4', '#FCAF45'], // Instagram Story Gradient
   },
 };
 

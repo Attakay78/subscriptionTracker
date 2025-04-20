@@ -28,6 +28,7 @@ export function SubscriptionCard({ subscription, onPress }: SubscriptionCardProp
   const nextBillingDate = calculateNextBillingDate(startDate, billingCycle);
   const daysUntilBilling = differenceInDays(nextBillingDate, new Date());
   const isNearBilling = daysUntilBilling <= 3;
+  const isOverdue = daysUntilBilling < 0;
   
   const handlePress = () => {
     if (onPress) {
@@ -47,12 +48,19 @@ export function SubscriptionCard({ subscription, onPress }: SubscriptionCardProp
   return (
     <Card 
       onPress={handlePress}
-      style={styles.card}
+      style={[
+        styles.card,
+        !isNearBilling && !isOverdue && styles.cardNormal
+      ]}
       elevation="md"
     >
-      {isNearBilling && (
+      {(isNearBilling || isOverdue) && (
         <LinearGradient
-          colors={['rgba(239, 68, 68, 0.1)', 'rgba(239, 68, 68, 0.05)', 'transparent']}
+          colors={[
+            isOverdue ? COLORS.error[500] : COLORS.error[400],
+            isOverdue ? `${COLORS.error[500]}80` : `${COLORS.error[400]}40`,
+            'transparent'
+          ]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.warningGradient}
@@ -73,11 +81,15 @@ export function SubscriptionCard({ subscription, onPress }: SubscriptionCardProp
           </View>
           <View style={[
             styles.statusBadge,
-            isNearBilling && styles.statusBadgeWarning
+            isOverdue && styles.statusBadgeOverdue,
+            isNearBilling && styles.statusBadgeWarning,
+            !isNearBilling && !isOverdue && styles.statusBadgeNormal
           ]}>
             <Text style={[
               styles.statusText,
-              isNearBilling && styles.statusTextWarning
+              isOverdue && styles.statusTextOverdue,
+              isNearBilling && styles.statusTextWarning,
+              !isNearBilling && !isOverdue && styles.statusTextNormal
             ]}>
               {getBillingStatusText()}
             </Text>
@@ -92,6 +104,9 @@ const styles = StyleSheet.create({
   card: {
     marginBottom: SPACING[2],
     overflow: 'hidden',
+  },
+  cardNormal: {
+    backgroundColor: COLORS.neutral[100], // Light ash color from Instagram theme
   },
   warningGradient: {
     position: 'absolute',
@@ -155,18 +170,28 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingVertical: 2,
     paddingHorizontal: SPACING[1.5],
-    backgroundColor: COLORS.neutral[100],
     borderRadius: BORDER_RADIUS.full,
+  },
+  statusBadgeNormal: {
+    backgroundColor: COLORS.neutral[200], // Slightly darker ash for the badge
   },
   statusBadgeWarning: {
     backgroundColor: COLORS.error[50],
   },
+  statusBadgeOverdue: {
+    backgroundColor: COLORS.error[500],
+  },
   statusText: {
     fontFamily: FONTS.medium,
     fontSize: FONT_SIZES.xs,
-    color: COLORS.neutral[700],
+  },
+  statusTextNormal: {
+    color: COLORS.neutral[700], // Dark ash text for better contrast
   },
   statusTextWarning: {
     color: COLORS.error[700],
+  },
+  statusTextOverdue: {
+    color: COLORS.white,
   },
 });

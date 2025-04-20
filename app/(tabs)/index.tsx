@@ -15,12 +15,12 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { ArrowDown, ArrowUp, ChevronDown, ArrowUpDown } from 'lucide-react-native';
+import { ArrowDown, ArrowUp, ChevronDown, ArrowUpDown, ChartBar as BarChart3 } from 'lucide-react-native';
 import { COLORS, FONTS, FONT_SIZES, SPACING, BORDER_RADIUS } from '@/constants/theme';
 import { SubscriptionCard } from '@/components/subscription/SubscriptionCard';
 import { useSubscriptions } from '@/context/SubscriptionContext';
 import { useAuth } from '@/context/AuthContext';
-import { calculateNextBillingDate, calculateTotalMonthlyExpenses, formatCurrency, Subscription, groupSubscriptionsByCurrency } from '@/data/fakeData';
+import { calculateTotalMonthlyExpenses, formatCurrency, Subscription, groupSubscriptionsByCurrency } from '@/data/fakeData';
 import { SUPPORTED_CURRENCIES, getCurrencySymbol } from '@/data/subscriptionPlatforms';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -85,8 +85,8 @@ export default function HomeScreen() {
           comparison = a.price - b.price;
           break;
         case 'nextBilling':
-          const dateA = calculateNextBillingDate(a.startDate, a.billingCycle);
-          const dateB = calculateNextBillingDate(b.startDate, b.billingCycle);
+          const dateA = new Date(a.startDate);
+          const dateB = new Date(b.startDate);
           comparison = dateA.getTime() - dateB.getTime();
           break;
         case 'currency':
@@ -103,25 +103,6 @@ export default function HomeScreen() {
     return sortSubscriptions(filtered);
   };
 
-  const calculateTotalForPeriod = (billingCycle: string) => {
-    const filtered = subscriptions.filter(sub => sub.billingCycle === billingCycle);
-    let total = filtered.reduce((sum, sub) => sum + sub.price, 0);
-    
-    switch (billingCycle) {
-      case 'weekly':
-        total *= 4.33;
-        break;
-      case 'quarterly':
-        total /= 3;
-        break;
-      case 'yearly':
-        total /= 12;
-        break;
-    }
-    
-    return total;
-  };
-
   const onRefresh = async () => {
     setRefreshing(true);
     setTimeout(() => {
@@ -134,33 +115,48 @@ export default function HomeScreen() {
       subscriptions.filter(sub => sub.billingCycle === item.value)
     );
     const count = getFilteredSubscriptions(item.value).length;
+    const currencyEntries = Object.entries(currencyTotals);
+    const shouldCenter = currencyEntries.length < 3;
 
     return (
-      <TouchableOpacity 
-        style={[styles.statsCard, { backgroundColor: item.color }]}
-        onPress={() => router.push(`/overview/${item.value}`)}
-      >
-        <Text style={styles.statsTitle}>{item.label} Subscriptions</Text>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.currencyTotalsContainer}
-        >
-          {Object.entries(currencyTotals).map(([currency, amount], idx) => (
-            <View key={currency} style={styles.currencyTotal}>
-              <Text style={styles.statsAmount}>
-                {formatCurrency(amount, currency)}
-              </Text>
-              {idx < Object.entries(currencyTotals).length - 1 && (
-                <Text style={styles.currencySeparator}>•</Text>
-              )}
-            </View>
-          ))}
-        </ScrollView>
+      <View style={[styles.statsCard, { backgroundColor: item.color }]}>
+        <View style={styles.statsHeader}>
+          <Text style={styles.statsTitle}>{item.label} Subscriptions</Text>
+          <TouchableOpacity 
+            style={styles.overviewButton}
+            onPress={() => router.push(`/overview/${item.value}`)}
+          >
+            <BarChart3 size={16} color={COLORS.white} />
+            <Text style={styles.overviewButtonText}>Overview</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.currencyTotalsWrapper}>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={[
+              styles.currencyTotalsContainer,
+              shouldCenter && styles.currencyTotalsContainerCentered
+            ]}
+          >
+            {currencyEntries.map(([currency, amount], idx) => (
+              <View key={currency} style={styles.currencyTotal}>
+                <Text style={styles.statsAmount}>
+                  {formatCurrency(amount, currency)}
+                </Text>
+                {idx < currencyEntries.length - 1 && (
+                  <Text style={styles.currencySeparator}>•</Text>
+                )}
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+
         <Text style={styles.statsSubtitle}>
           {count} Active Subscription{count !== 1 ? 's' : ''}
         </Text>
-      </TouchableOpacity>
+      </View>
     );
   };
 
@@ -339,9 +335,14 @@ const styles = StyleSheet.create({
   statsCard: {
     padding: SPACING[4],
     borderRadius: 16,
-    alignItems: 'center',
     height: 160,
     width: CARD_WIDTH,
+  },
+  statsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING[2],
   },
   statsTitle: {
     fontFamily: FONTS.medium,
@@ -349,10 +350,31 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     opacity: 0.9,
   },
+  overviewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: SPACING[2],
+    paddingVertical: SPACING[1],
+    borderRadius: BORDER_RADIUS.full,
+    gap: SPACING[1],
+  },
+  overviewButtonText: {
+    fontFamily: FONTS.medium,
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.white,
+  },
+  currencyTotalsWrapper: {
+    flex: 1,
+    justifyContent: 'center',
+  },
   currencyTotalsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: SPACING[2],
+  },
+  currencyTotalsContainerCentered: {
+    flex: 1,
+    justifyContent: 'center',
   },
   currencyTotal: {
     flexDirection: 'row',
@@ -374,6 +396,7 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.sm,
     color: COLORS.white,
     opacity: 0.8,
+    marginTop: 'auto',
   },
   pagination: {
     flexDirection: 'row',

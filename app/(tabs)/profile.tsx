@@ -40,23 +40,26 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.profileSection}>
-          <Image
-            source={{ uri: user?.avatar }}
-            style={styles.avatar}
-          />
-          <View style={styles.profileInfo}>
-            <Text style={styles.name}>{user?.name}</Text>
-            <View style={styles.emailContainer}>
-              <Mail size={16} color={COLORS.neutral[500]} />
-              <Text style={styles.email}>{user?.email}</Text>
+          <View style={styles.profileContent}>
+            <Image
+              source={{ uri: user?.avatar }}
+              style={styles.avatar}
+            />
+            <View style={styles.profileInfo}>
+              <Text style={styles.name}>{user?.name}</Text>
+              <View style={styles.emailContainer}>
+                <Mail size={16} color={COLORS.neutral[500]} />
+                <Text style={styles.email}>{user?.email}</Text>
+              </View>
             </View>
           </View>
           <Button
-            title="Edit"
+            title="Edit Profile"
             onPress={() => {}}
             variant="outline"
             size="sm"
             icon={<Edit size={16} color={COLORS.primary[500]} />}
+            style={styles.editButton}
           />
         </View>
 
@@ -134,12 +137,15 @@ const styles = StyleSheet.create({
     color: COLORS.neutral[900],
   },
   profileSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: SPACING[4],
     backgroundColor: COLORS.white,
     margin: SPACING[4],
     borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING[4],
+  },
+  profileContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING[3],
   },
   avatar: {
     width: 60,
@@ -165,6 +171,11 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.sm,
     color: COLORS.neutral[600],
     marginLeft: SPACING[0.5],
+  },
+  editButton: {
+    alignSelf: 'flex-start',
+    borderColor: COLORS.primary[100],
+    backgroundColor: COLORS.primary[50],
   },
   section: {
     paddingHorizontal: SPACING[4],

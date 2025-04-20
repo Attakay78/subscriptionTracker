@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -7,16 +7,23 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft } from 'lucide-react-native';
-import { format, addMonths, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import { ArrowLeft, ChevronDown } from 'lucide-react-native';
+import { format, addMonths, startOfMonth, endOfMonth, subMonths, subYears } from 'date-fns';
+import Svg, { Path, Circle, G } from 'react-native-svg';
 import { COLORS, FONTS, FONT_SIZES, SPACING, BORDER_RADIUS } from '@/constants/theme';
 import { useSubscriptions } from '@/context/SubscriptionContext';
 import { calculateTotalMonthlyExpenses, formatCurrency } from '@/data/fakeData';
+import { SUPPORTED_CURRENCIES, getCurrencySymbol } from '@/data/subscriptionPlatforms';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CHART_SIZE = SCREEN_WIDTH - SPACING[8] * 2;
+const DONUT_WIDTH = 40;
+const RADIUS = (CHART_SIZE - DONUT_WIDTH) / 2;
+const CENTER = CHART_SIZE / 2;
 
 type BillingType = 'weekly' | 'monthly' | 'quarterly' | 'yearly';
 
@@ -26,15 +33,57 @@ interface CategoryTotal {
   color: string;
 }
 
-function getMonthsForPeriod(type: BillingType, count: number = 3): Date[] {
+function getPeriodsForType(type: BillingType): { label: string; startDate: Date; endDate: Date }[] {
   const today = new Date();
-  const months: Date[] = [];
   
-  for (let i = 0; i < count; i++) {
-    months.push(subMonths(today, i));
+  switch (type) {
+    case 'quarterly': {
+      const currentQuarterMonth = Math.floor(today.getMonth() / 3) * 3;
+      const currentQuarterStart = new Date(today.getFullYear(), currentQuarterMonth, 1);
+      const previousQuarterStart = new Date(today.getFullYear(), currentQuarterMonth - 3, 1);
+      
+      return [
+        {
+          label: `Q${Math.floor(currentQuarterMonth / 3) + 1} ${today.getFullYear()}`,
+          startDate: currentQuarterStart,
+          endDate: new Date(today.getFullYear(), currentQuarterMonth + 3, 0),
+        },
+        {
+          label: `Q${Math.floor((currentQuarterMonth - 3) / 3) + 1} ${previousQuarterStart.getFullYear()}`,
+          startDate: previousQuarterStart,
+          endDate: new Date(today.getFullYear(), currentQuarterMonth - 1, 0),
+        },
+      ];
+    }
+    
+    case 'yearly': {
+      return [
+        {
+          label: `${today.getFullYear()}`,
+          startDate: new Date(today.getFullYear(), 0, 1),
+          endDate: new Date(today.getFullYear(), 11, 31),
+        },
+        {
+          label: `${today.getFullYear() - 1}`,
+          startDate: new Date(today.getFullYear() - 1, 0, 1),
+          endDate: new Date(today.getFullYear() - 1, 11, 31),
+        },
+      ];
+    }
+    
+    default: {
+      const months: { label: string; startDate: Date; endDate: Date }[] = [];
+      for (let i = 0; i < 3; i++) {
+        const date = subMonths(today, i);
+        months.push({
+          label: format(date, 'MMMM yyyy'),
+          startDate: startOfMonth(date),
+          endDate: endOfMonth(date),
+        });
+      }
+      return months.reverse();
+    }
   }
-  
-  return months.reverse();
 }
 
 function getCategoryColor(category: string): string {
@@ -54,16 +103,38 @@ function getCategoryColor(category: string): string {
   }
 }
 
+function polarToCartesian(centerX: number, centerY: number, radius: number, angleInDegrees: number) {
+  const angleInRadians = (angleInDegrees - 90) * Math.PI / 180.0;
+  return {
+    x: centerX + (radius * Math.cos(angleInRadians)),
+    y: centerY + (radius * Math.sin(angleInRadians))
+  };
+}
+
+function describeArc(x: number, y: number, radius: number, startAngle: number, endAngle: number) {
+  const start = polarToCartesian(x, y, radius, endAngle);
+  const end = polarToCartesian(x, y, radius, startAngle);
+  const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
+  
+  return [
+    "M", start.x, start.y,
+    "A", radius, radius, 0, largeArcFlag, 0, end.x, end.y
+  ].join(" ");
+}
+
 export default function OverviewScreen() {
   const { type } = useLocalSearchParams<{ type: BillingType }>();
   const router = useRouter();
   const { subscriptions } = useSubscriptions();
+  const [selectedCurrency, setSelectedCurrency] = useState('USD');
+  const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
 
   const filteredSubscriptions = subscriptions.filter(sub => sub.billingCycle === type);
-  const months = getMonthsForPeriod(type);
+  const periods = getPeriodsForType(type);
   
-  const getCategoryTotals = (date: Date): CategoryTotal[] => {
+  const getCategoryTotals = (startDate: Date, endDate: Date): CategoryTotal[] => {
     const totals: Record<string, number> = {};
+    let total = 0;
     
     filteredSubscriptions.forEach(sub => {
       const category = sub.category;
@@ -73,32 +144,31 @@ export default function OverviewScreen() {
       
       let amount = sub.price;
       if (type === 'weekly') {
-        amount *= 4.33; // Average weeks per month
+        amount *= 4.33;
       } else if (type === 'quarterly') {
         amount /= 3;
       } else if (type === 'yearly') {
         amount /= 12;
       }
       
-      totals[category] += amount;
+      const convertedAmount = amount;
+      totals[category] += convertedAmount;
+      total += convertedAmount;
     });
 
-    return Object.entries(totals).map(([category, amount]) => ({
-      category,
-      amount,
-      color: getCategoryColor(category),
-    }));
+    return Object.entries(totals).map(([category, amount]) => {
+      const periodAmount = type === 'quarterly' ? amount * 3 : type === 'yearly' ? amount * 12 : amount;
+      return {
+        category,
+        amount: periodAmount,
+        color: getCategoryColor(category),
+      };
+    }).sort((a, b) => b.amount - a.amount);
   };
 
-  const getMonthTotal = (categoryTotals: CategoryTotal[]): number => {
+  const getTotal = (categoryTotals: CategoryTotal[]): number => {
     return categoryTotals.reduce((sum, cat) => sum + cat.amount, 0);
   };
-
-  const getMaxTotal = (): number => {
-    return Math.max(...months.map(month => getMonthTotal(getCategoryTotals(month))));
-  };
-
-  const maxTotal = getMaxTotal();
 
   return (
     <SafeAreaView style={styles.container}>
@@ -109,47 +179,127 @@ export default function OverviewScreen() {
         <Text style={styles.title}>
           {type.charAt(0).toUpperCase() + type.slice(1)} Overview
         </Text>
+        <TouchableOpacity 
+          style={styles.currencySelector}
+          onPress={() => setShowCurrencyPicker(true)}
+        >
+          <Text style={styles.currencyText}>{selectedCurrency}</Text>
+          <ChevronDown size={16} color={COLORS.neutral[500]} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content}>
-        {months.map(month => {
-          const categoryTotals = getCategoryTotals(month);
-          const monthTotal = getMonthTotal(categoryTotals);
+        {periods.map(period => {
+          const categoryTotals = getCategoryTotals(period.startDate, period.endDate);
+          const total = getTotal(categoryTotals);
+          let startAngle = 0;
+          const totalPercentage = 360;
+          const sliceAngle = totalPercentage / categoryTotals.length;
 
           return (
-            <View key={month.toISOString()} style={styles.monthSection}>
-              <Text style={styles.monthTitle}>
-                {format(month, 'MMMM yyyy')}
-              </Text>
+            <View key={period.label} style={styles.periodSection}>
+              <Text style={styles.periodTitle}>{period.label}</Text>
 
               <View style={styles.chartContainer}>
                 <View style={styles.donutChart}>
+                  <Svg width={CHART_SIZE} height={CHART_SIZE}>
+                    <G transform={`translate(${CENTER}, ${CENTER})`}>
+                      {categoryTotals.map((category, index) => {
+                        const endAngle = startAngle + sliceAngle;
+                        const path = describeArc(
+                          0,
+                          0,
+                          RADIUS,
+                          startAngle,
+                          endAngle
+                        );
+                        const currentPath = (
+                          <Path
+                            key={index}
+                            d={path}
+                            fill="none"
+                            stroke={category.color}
+                            strokeWidth={DONUT_WIDTH}
+                          />
+                        );
+                        startAngle = endAngle;
+                        return currentPath;
+                      })}
+                      <Circle r={RADIUS - DONUT_WIDTH / 2} fill={COLORS.white} />
+                    </G>
+                  </Svg>
                   <View style={styles.donutCenter}>
                     <Text style={styles.totalAmount}>
-                      {formatCurrency(monthTotal, 'USD')}
+                      {formatCurrency(total, selectedCurrency)}
                     </Text>
-                    <Text style={styles.totalLabel}>Total</Text>
+                    <Text style={styles.totalLabel}>
+                      {type === 'quarterly' ? 'Quarter Total' : type === 'yearly' ? 'Year Total' : 'Month Total'}
+                    </Text>
                   </View>
                 </View>
 
-                <View style={styles.categoriesList}>
-                  {categoryTotals.map((cat, index) => (
+                <View style={styles.categoriesCard}>
+                  {categoryTotals.map((cat) => (
                     <View key={cat.category} style={styles.categoryItem}>
                       <View style={styles.categoryHeader}>
                         <View style={[styles.categoryDot, { backgroundColor: cat.color }]} />
                         <Text style={styles.categoryName}>{cat.category}</Text>
                       </View>
                       <Text style={styles.categoryAmount}>
-                        {formatCurrency(cat.amount, 'USD')}
+                        {formatCurrency(cat.amount, selectedCurrency)}
                       </Text>
                     </View>
                   ))}
                 </View>
               </View>
+
+              {type === 'quarterly' && (
+                <Text style={styles.periodRange}>
+                  {format(period.startDate, 'MMM d')} - {format(period.endDate, 'MMM d, yyyy')}
+                </Text>
+              )}
             </View>
           );
         })}
       </ScrollView>
+
+      <Modal
+        visible={showCurrencyPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCurrencyPicker(false)}
+      >
+        <Pressable 
+          style={styles.modalOverlay}
+          onPress={() => setShowCurrencyPicker(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Select Currency</Text>
+            {SUPPORTED_CURRENCIES.map(currency => (
+              <TouchableOpacity
+                key={currency.code}
+                style={[
+                  styles.currencyItem,
+                  selectedCurrency === currency.code && styles.currencyItemSelected
+                ]}
+                onPress={() => {
+                  setSelectedCurrency(currency.code);
+                  setShowCurrencyPicker(false);
+                }}
+              >
+                <Text style={styles.currencySymbol}>{currency.symbol}</Text>
+                <View style={styles.currencyInfo}>
+                  <Text style={styles.currencyName}>{currency.name}</Text>
+                  <Text style={styles.currencyCode}>{currency.code}</Text>
+                </View>
+                {selectedCurrency === currency.code && (
+                  <View style={styles.selectedIndicator} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -177,21 +327,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   title: {
+    flex: 1,
     fontFamily: FONTS.bold,
     fontSize: FONT_SIZES.xl,
     color: COLORS.neutral[900],
+  },
+  currencySelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.neutral[100],
+    paddingHorizontal: SPACING[2],
+    paddingVertical: SPACING[1],
+    borderRadius: BORDER_RADIUS.full,
+    gap: SPACING[1],
+  },
+  currencyText: {
+    fontFamily: FONTS.medium,
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral[700],
   },
   content: {
     flex: 1,
     padding: SPACING[4],
   },
-  monthSection: {
+  periodSection: {
     backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.xl,
     padding: SPACING[4],
     marginBottom: SPACING[4],
   },
-  monthTitle: {
+  periodTitle: {
     fontFamily: FONTS.semiBold,
     fontSize: FONT_SIZES.lg,
     color: COLORS.neutral[900],
@@ -199,37 +364,40 @@ const styles = StyleSheet.create({
   },
   chartContainer: {
     alignItems: 'center',
+    gap: SPACING[4],
   },
   donutChart: {
     width: CHART_SIZE,
     height: CHART_SIZE,
-    borderRadius: CHART_SIZE / 2,
-    backgroundColor: COLORS.neutral[100],
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: SPACING[4],
   },
   donutCenter: {
-    width: CHART_SIZE - 80,
-    height: CHART_SIZE - 80,
-    borderRadius: (CHART_SIZE - 80) / 2,
-    backgroundColor: COLORS.white,
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: [{ translateX: -CHART_SIZE / 4 }, { translateY: -CHART_SIZE / 4 }],
+    width: CHART_SIZE / 2,
+    height: CHART_SIZE / 2,
     justifyContent: 'center',
     alignItems: 'center',
   },
   totalAmount: {
     fontFamily: FONTS.bold,
-    fontSize: FONT_SIZES['3xl'],
+    fontSize: FONT_SIZES['2xl'],
     color: COLORS.neutral[900],
     marginBottom: SPACING[1],
+    textAlign: 'center',
   },
   totalLabel: {
     fontFamily: FONTS.medium,
-    fontSize: FONT_SIZES.base,
+    fontSize: FONT_SIZES.sm,
     color: COLORS.neutral[500],
+    textAlign: 'center',
   },
-  categoriesList: {
+  categoriesCard: {
     width: '100%',
+    backgroundColor: COLORS.background.primary,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING[3],
   },
   categoryItem: {
     flexDirection: 'row',
@@ -240,12 +408,12 @@ const styles = StyleSheet.create({
   categoryHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: SPACING[2],
   },
   categoryDot: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    marginRight: SPACING[2],
   },
   categoryName: {
     fontFamily: FONTS.medium,
@@ -256,5 +424,68 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.semiBold,
     fontSize: FONT_SIZES.base,
     color: COLORS.neutral[900],
+  },
+  periodRange: {
+    fontFamily: FONTS.regular,
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral[600],
+    textAlign: 'center',
+    marginTop: SPACING[2],
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    padding: SPACING[4],
+  },
+  modalContent: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.xl,
+    padding: SPACING[2],
+  },
+  modalTitle: {
+    fontFamily: FONTS.semiBold,
+    fontSize: FONT_SIZES.lg,
+    color: COLORS.neutral[900],
+    padding: SPACING[3],
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral[200],
+  },
+  currencyItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING[3],
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral[100],
+  },
+  currencyItemSelected: {
+    backgroundColor: COLORS.primary[50],
+  },
+  currencySymbol: {
+    fontFamily: FONTS.semiBold,
+    fontSize: FONT_SIZES.xl,
+    color: COLORS.neutral[900],
+    width: 40,
+    textAlign: 'center',
+  },
+  currencyInfo: {
+    flex: 1,
+    marginLeft: SPACING[2],
+  },
+  currencyName: {
+    fontFamily: FONTS.medium,
+    fontSize: FONT_SIZES.base,
+    color: COLORS.neutral[900],
+  },
+  currencyCode: {
+    fontFamily: FONTS.regular,
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral[500],
+  },
+  selectedIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.primary[500],
   },
 });
